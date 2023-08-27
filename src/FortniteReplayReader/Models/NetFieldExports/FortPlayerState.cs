@@ -49,7 +49,11 @@ namespace FortniteReplayReader.Models.NetFieldExports
 		[NetFieldExport("UniqueId", RepLayoutCmdType.PropertyNetId)]
 		public string UniqueId { get; set; } //Type: FUniqueNetIdRepl Bits: 144
 
-		[NetFieldExport("PlayerNamePrivate", RepLayoutCmdType.PropertyString)]
+		//Version 26
+        [NetFieldExport("UniqueID", RepLayoutCmdType.PropertyNetId)]
+        public string UniqueId_ { get; set; } //Type: FUniqueNetIdRepl Bits: 144
+
+        [NetFieldExport("PlayerNamePrivate", RepLayoutCmdType.PropertyString)]
 		public string PlayerNamePrivate { get; set; } //Type: FString Bits: 128
 
 		[NetFieldExport("bIsGameSessionOwner", RepLayoutCmdType.PropertyBool)]
