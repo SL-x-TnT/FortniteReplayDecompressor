@@ -12,6 +12,7 @@ namespace Unreal.Core.Models
         StreamChunkTimes = 4,
         FriendlyNameEncoding = 5,
         Encryption = 6,
+        HISTORY_2500 = 7,
 
         NewVersion,
         Latest = NewVersion - 1

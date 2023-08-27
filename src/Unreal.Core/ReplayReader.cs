@@ -456,6 +456,13 @@ namespace Unreal.Core
                 throw new InvalidReplayException($"Header.Version < MIN_NETWORK_DEMO_VERSION. Header.Version: {header.NetworkVersion}, MIN_NETWORK_DEMO_VERSION: {NetworkVersionHistory.HISTORY_EXTRA_VERSION}");
             }
 
+            if(header.NetworkVersion >= NetworkVersionHistory.HISTORY_USE_CUSTOM_VERSION)
+            {
+                var customVersionCount = archive.ReadInt32();
+
+                archive.SkipBytes(customVersionCount * 20);
+            }
+
             header.NetworkChecksum = archive.ReadUInt32();
             header.EngineNetworkVersion = archive.ReadUInt32AsEnum<EngineNetworkVersionHistory>();
             header.GameNetworkProtocolVersion = archive.ReadUInt32();
@@ -554,6 +561,15 @@ namespace Unreal.Core
 
             var fileVersion = archive.ReadUInt32AsEnum<ReplayVersionHistory>();
             archive.ReplayVersion = fileVersion;
+
+            if (archive.ReplayVersion >= ReplayVersionHistory.HISTORY_2500)
+            {
+                var customVersionCount = archive.ReadInt32();
+
+                // version guid -> 16 bytes
+                // version -> 4 bytes
+                archive.SkipBytes(customVersionCount * 20);
+            }
 
             var info = new ReplayInfo()
             {

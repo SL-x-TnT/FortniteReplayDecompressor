@@ -144,7 +144,7 @@ namespace ConsoleReader
 
             //var replayFile = "Replays/season12_arena.replay";
             //var replayFile = "Replays/season11.31.replay
-            var replayFile = "Replays/UE_update.replay"; //Used for testing
+            var replayFile = "Replays/v26.replay"; //Used for testing
             //var replayFile = @"C:\Users\TnT\Source\Repos\FortniteReplayDecompressor_Shiqan\src\ConsoleReader\bin\Release\netcoreapp3.1\Replays\collectPickup.replay";
 
             //var replayFile = "Replays/season11.11.replay"; //Used for testing
