@@ -45,6 +45,7 @@ namespace Unreal.Core
         private static Vector512<byte> _avx512BitMask = Vector512.Create(0x8040201008040201).AsByte();
 #endif
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void CreateBitArray(byte* ptr, int byteCount, int totalBits)
         {
             _owner = PinnedMemoryPool<bool>.Shared.Rent(byteCount * 8);
@@ -57,6 +58,9 @@ namespace Unreal.Core
 #if NET8_0_OR_GREATER
                 if (Avx512BW.IsSupported)
                 {
+                    //Console.WriteLine("a");
+
+
                     Span<byte> rb = new Span<byte>(_owner.PinnedMemory.Pointer, byteCount * 8);
                     Span<byte> db = new Span<byte>(ptr, byteCount);
 
@@ -117,8 +121,6 @@ namespace Unreal.Core
 
                     for (int i = 0; i < byteCount; i++)
                     {
-                        var a = *(bb + i);
-
                         *(bb + i) = Bmi2.X64.ParallelBitDeposit(*(ptr + i), 0x0101010101010101UL);
 
                         var ba = *(bb + i);
@@ -127,7 +129,7 @@ namespace Unreal.Core
                     Bits = (bool*)bb;
                 }
             }
-            //else
+            else
             {
                 //Should changed this to 
                 /*

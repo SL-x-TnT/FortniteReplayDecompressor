@@ -32,14 +32,19 @@ namespace ConsoleReader
 {
     
     [MemoryDiagnoser]
-    [SimpleJob]
+    //[SimpleJob(RuntimeMoniker.Net50)]
+    [SimpleJob(RuntimeMoniker.Net70)]
+    [SimpleJob(RuntimeMoniker.Net80)]
     public class Benchmark
     {
         public ReplayReader _reader = new ReplayReader(null, null);
 
         private byte[] test = new byte[100000];
 
-        [Params(ParseType.Minimal, ParseType.Normal, ParseType.Full)]
+        [Params(false, true)]
+        public bool EnableIntrinsics;
+
+        [Params(ParseType.Full)]
         public ParseType Type;
 
         public Benchmark()
@@ -60,39 +65,51 @@ namespace ConsoleReader
         }
         */
 
-        //[Benchmark]
+        [Benchmark]
         public FortniteReplay ReadServerReplay()
         {
+            BitReader.UseIntrinsics = EnableIntrinsics;
+
             return _reader.ReadReplay("Replays/server.replay", Type);
         }
 
         //[Benchmark]
         public FortniteReplay ReadMassiveReplay()
         {
+            BitReader.UseIntrinsics = EnableIntrinsics;
+
             return _reader.ReadReplay("Replays/massive.replay", Type);
         }
 
-        //[Benchmark]
+        [Benchmark]
         public FortniteReplay ReadLongReplay()
         {
+            BitReader.UseIntrinsics = EnableIntrinsics;
+
             return _reader.ReadReplay("Replays/newSeason.replay", Type);
         }
         
         [Benchmark]
         public FortniteReplay ReadShortReplay()
         {
+            BitReader.UseIntrinsics = EnableIntrinsics;
+
             return _reader.ReadReplay("Replays/replay_Bow.replay", Type);
         }
         
         //[Benchmark]
         public FortniteReplay ReadOldReplay()
         {
+            BitReader.UseIntrinsics = EnableIntrinsics;
+
             return _reader.ReadReplay("Replays/season11.11.replay", Type);
         }
 
         //[Benchmark]
         public FortniteReplay ReadRoundReplay()
         {
+            BitReader.UseIntrinsics = EnableIntrinsics;
+
             return _reader.ReadReplay("Replays/rounds.replay", Type);
         }
     }
@@ -107,23 +124,23 @@ namespace ConsoleReader
             //Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.AboveNormal;
             //Process.GetCurrentProcess().ProcessorAffinity = new IntPtr(0xFC0);
 
-//#if DEBUG
-//            var summary = BenchmarkRunner.Run<Benchmark>();
+#if !DEBUG
+            var summary = BenchmarkRunner.Run<Benchmark>();
 
-//            Console.WriteLine(summary);
-            
-//            Benchmark a = new Benchmark();
-            
+            Console.WriteLine(summary);
 
-//            var b = a.ReadLongReplay();
-//            /*
-//            ReplayReader reader2 = a._reader;
+            Benchmark a = new Benchmark();
 
-//            Console.WriteLine($"Total Groups Read: {reader2?.TotalGroupsRead}. Failed Bunches: {reader2?.TotalFailedBunches}. Failed Replicator: {reader2?.TotalFailedReplicatorReceives} Null Exports: {reader2?.NullHandles} Property Errors: {reader2?.PropertyError} Failed Property Reads: {reader2?.FailedToRead}");
-//            Console.WriteLine($"Pins: {FBitArray.Pins}");
-//            */
-//            return;
-//#endif
+
+            var b = a.ReadLongReplay();
+            /*
+            ReplayReader reader2 = a._reader;
+
+            Console.WriteLine($"Total Groups Read: {reader2?.TotalGroupsRead}. Failed Bunches: {reader2?.TotalFailedBunches}. Failed Replicator: {reader2?.TotalFailedReplicatorReceives} Null Exports: {reader2?.NullHandles} Property Errors: {reader2?.PropertyError} Failed Property Reads: {reader2?.FailedToRead}");
+            Console.WriteLine($"Pins: {FBitArray.Pins}");
+            */
+            return;
+#endif
             var serviceCollection = new ServiceCollection()
                 .AddLogging(loggingBuilder => loggingBuilder
                     .AddConsole()
