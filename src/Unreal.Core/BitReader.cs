@@ -331,7 +331,6 @@ namespace Unreal.Core
             Span<byte> bytes = stackalloc byte[length];
             ReadBytes(bytes);
 
-
             return isUnicode ? Encoding.Unicode.GetString(bytes.Slice(0, bytes.Length - 2)) : Encoding.Default.GetString(bytes.Slice(0, bytes.Length - 1));
         }
 
@@ -356,7 +355,10 @@ namespace Unreal.Core
             int value = 0;
             int count = 0;
 
-            for (uint mask = 1; (value + mask) < maxValue; mask *= 2)
+
+            var mValue = (uint)maxValue;
+
+            for (uint mask = 1; (value + mask) < mValue; mask *= 2)
             {
                 if (_position >= LastBit)
                 {

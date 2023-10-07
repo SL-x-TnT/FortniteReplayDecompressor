@@ -107,7 +107,7 @@ namespace ConsoleReader
             //Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.AboveNormal;
             //Process.GetCurrentProcess().ProcessorAffinity = new IntPtr(0xFC0);
 
-#if !DEBUG
+#if DEBUG
             var summary = BenchmarkRunner.Run<Benchmark>();
 
             Console.WriteLine(summary);
@@ -144,7 +144,7 @@ namespace ConsoleReader
 
             //var replayFile = "Replays/season12_arena.replay";
             //var replayFile = "Replays/season11.31.replay
-            var replayFile = "Replays/v26.replay"; //Used for testing
+            var replayFile = "Replays/server.replay"; //Used for testing
             //var replayFile = @"C:\Users\TnT\Source\Repos\FortniteReplayDecompressor_Shiqan\src\ConsoleReader\bin\Release\netcoreapp3.1\Replays\collectPickup.replay";
 
             //var replayFile = "Replays/season11.11.replay"; //Used for testing
@@ -191,7 +191,7 @@ namespace ConsoleReader
 
                     sw.Restart();
 
-                    var replay = reader.ReadReplay(replayFile, ParseType.Minimal);
+                    var replay = reader.ReadReplay(replayFile, ParseType.Full);
 
                     sw.Stop();
                      
