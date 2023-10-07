@@ -107,23 +107,23 @@ namespace ConsoleReader
             //Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.AboveNormal;
             //Process.GetCurrentProcess().ProcessorAffinity = new IntPtr(0xFC0);
 
-#if DEBUG
-            var summary = BenchmarkRunner.Run<Benchmark>();
+//#if DEBUG
+//            var summary = BenchmarkRunner.Run<Benchmark>();
 
-            Console.WriteLine(summary);
+//            Console.WriteLine(summary);
             
-            Benchmark a = new Benchmark();
+//            Benchmark a = new Benchmark();
             
 
-            var b = a.ReadLongReplay();
-            /*
-            ReplayReader reader2 = a._reader;
+//            var b = a.ReadLongReplay();
+//            /*
+//            ReplayReader reader2 = a._reader;
 
-            Console.WriteLine($"Total Groups Read: {reader2?.TotalGroupsRead}. Failed Bunches: {reader2?.TotalFailedBunches}. Failed Replicator: {reader2?.TotalFailedReplicatorReceives} Null Exports: {reader2?.NullHandles} Property Errors: {reader2?.PropertyError} Failed Property Reads: {reader2?.FailedToRead}");
-            Console.WriteLine($"Pins: {FBitArray.Pins}");
-            */
-            return;
-#endif
+//            Console.WriteLine($"Total Groups Read: {reader2?.TotalGroupsRead}. Failed Bunches: {reader2?.TotalFailedBunches}. Failed Replicator: {reader2?.TotalFailedReplicatorReceives} Null Exports: {reader2?.NullHandles} Property Errors: {reader2?.PropertyError} Failed Property Reads: {reader2?.FailedToRead}");
+//            Console.WriteLine($"Pins: {FBitArray.Pins}");
+//            */
+//            return;
+//#endif
             var serviceCollection = new ServiceCollection()
                 .AddLogging(loggingBuilder => loggingBuilder
                     .AddConsole()
