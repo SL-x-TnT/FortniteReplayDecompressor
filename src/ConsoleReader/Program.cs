@@ -41,7 +41,7 @@ namespace ConsoleReader
 
         private byte[] test = new byte[100000];
 
-        [Params(BitReader.Opts.Opt2, BitReader.Opts.Opt1, BitReader.Opts.Opt2)]
+        [Params(BitReader.Opts.Opt1, BitReader.Opts.None)]
         public BitReader.Opts EnableIntrinsics;
 
         [Params(ParseType.Full)]

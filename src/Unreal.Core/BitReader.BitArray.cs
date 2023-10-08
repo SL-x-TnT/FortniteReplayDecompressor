@@ -51,8 +51,8 @@ namespace Unreal.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void CreateBitArray(byte* ptr, int byteCount, int totalBits)
         {
-            //Gives a 256 bool buffer for faster parsing 
-            const int sizeBuffer = 256;
+            //Gives a 512 bool buffer for faster parsing 
+            const int sizeBuffer = 512;
 
             _owner = PinnedMemoryPool<bool>.Shared.Rent(byteCount * 8 + sizeBuffer);
             _items = _owner.PinnedMemory.Memory;
@@ -85,7 +85,7 @@ namespace Unreal.Core
                         vmask.CopyTo(rb.Slice(i * 64));
                     }
 
-                    //Can be slow on AMD, but it's a max of 7 iterations
+                    //Can be slow on AMD Zen 2 or earlier, but it's a max of 7 iterations
                     for (int i = d.Length * 8; i < db.Length; i++)
                     {
                         r[i] = Bmi2.X64.ParallelBitDeposit(db[i], 0x0101010101010101UL);

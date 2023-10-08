@@ -13,6 +13,7 @@ using Unreal.Core.Extensions;
 using Unreal.Core.Models;
 using Unreal.Core.Models.Enums;
 using System.Collections.Specialized;
+using System.Runtime.InteropServices;
 
 namespace Unreal.Core
 {
@@ -22,6 +23,19 @@ namespace Unreal.Core
     /// </summary>
     public unsafe partial class BitReader : FBitArchive
     {
+        //TEMP
+        static int counter = 0;
+
+        private void OutputCounter()
+        {
+            ++counter;
+
+            if(counter % 10 == 0)
+            {
+                Console.WriteLine(counter);
+            }
+        }
+
         /// <summary>
         /// Position in current BitArray. Set with <see cref="Seek(int, SeekOrigin)"/>
         /// </summary>
@@ -60,6 +74,8 @@ namespace Unreal.Core
             LastBit = bitCount;
         }
 
+        #region Helpers
+
         private static int[] GetPool()
         {
             if (_positionQueues.TryDequeue(out int[] result))
@@ -79,6 +95,130 @@ namespace Unreal.Core
         public override bool AtEnd()
         {
             return _position >= LastBit;
+        }
+
+        /// <summary>
+        /// Sets <see cref="Position"/> within current BitArray.
+        /// </summary>
+        /// <param name="offset">The offset relative to the <paramref name="seekOrigin"/>.</param>
+        /// <param name="seekOrigin">A value of type <see cref="SeekOrigin"/> indicating the reference point used to obtain the new position.</param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentOutOfRangeException"></exception>
+        public override void Seek(int offset, SeekOrigin seekOrigin = SeekOrigin.Begin)
+        {
+            if (offset < 0 || offset > LastBit || (seekOrigin == SeekOrigin.Current && offset + _position > LastBit))
+            {
+                throw new ArgumentOutOfRangeException("Specified offset doesnt fit within the BitArray buffer");
+            }
+
+            _ = (seekOrigin switch
+            {
+                SeekOrigin.Begin => _position = offset,
+                SeekOrigin.End => _position = LastBit - offset,
+                SeekOrigin.Current => _position += offset,
+                _ => _position = offset,
+            });
+        }
+
+        /// <summary>
+        /// Save Position to <see cref="MarkPosition"/> so we can reset back to this point.
+        /// see https://github.com/EpicGames/UnrealEngine/blob/70bc980c6361d9a7d23f6d23ffe322a2d6ef16fb/Engine/Source/Runtime/Core/Public/Serialization/BitReader.h#L228
+        /// </summary>
+        public override void Mark()
+        {
+            MarkPosition = _position;
+        }
+
+        /// <summary>
+        /// Set Position back to <see cref="MarkPosition"/>
+        /// see https://github.com/EpicGames/UnrealEngine/blob/70bc980c6361d9a7d23f6d23ffe322a2d6ef16fb/Engine/Source/Runtime/Core/Public/Serialization/BitReader.h#L228
+        /// </summary>
+        public override void Pop()
+        {
+            // TODO: pop makes it sound like a list...
+            _position = MarkPosition;
+        }
+
+        /// <summary>
+        /// Get number of bits left, including any bits after <see cref="LastBit"/>.
+        /// </summary>
+        /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override int GetBitsLeft()
+        {
+            return LastBit - _position;
+        }
+
+        /// <summary>
+        /// Append bool array to this archive.
+        /// </summary>
+        /// <param name="data"></param>
+        public override void AppendDataFromChecked(ReadOnlyMemory<bool> data)
+        {
+            AppendBits(data);
+        }
+
+        public override void Dispose()
+        {
+            DisposeBits();
+
+            _positionQueues.Enqueue(_tempLastBit);
+            _positionQueues.Enqueue(_tempPosition);
+        }
+
+        public void SetTempEnd(int totalBits, int index = 0)
+        {
+            uint setPosition = (uint)(_position + totalBits);
+
+            if(setPosition > LastBit)
+            {
+                IsError = true;
+
+                return;
+            }
+
+            _tempLastBit[index] = LastBit;
+            _tempPosition[index] = (int)setPosition;
+            LastBit = _position + totalBits;
+        }
+
+        public void RestoreTemp(int index = 0)
+        {
+            LastBit = _tempLastBit[index];
+            _position = _tempPosition[index];
+
+            /*
+            _tempLastBit = 0;
+            _tempPosition = 0;
+            */
+
+                IsError = false;
+        }
+
+        #endregion
+
+        #region Reading
+
+        public override void SkipBytes(uint byteCount)
+        {
+            SkipBytes((int)byteCount);
+        }
+
+        public override void SkipBytes(int byteCount)
+        {
+            Seek(byteCount * 8, SeekOrigin.Current);
+        }
+
+        public override void SkipBits(int numbits)
+        {
+            _position += numbits;
+
+            if (numbits < 0 || _position > LastBit)
+            {
+                IsError = true;
+
+                _position = LastBit;
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -127,6 +267,11 @@ namespace Unreal.Core
                 return 0;
             }
 
+            if (true && Avx2.IsSupported)
+            {
+                return (int)ReadBitsToInt_Intrinsic(bitCount);
+            }
+
             var result = 0;
 
             for (var i = 0; i < bitCount; i++)
@@ -141,6 +286,8 @@ namespace Unreal.Core
 
         public ulong ReadBitsToLong(int bitCount)
         {
+            //TODO AVX2/AVX512 instructions
+            //Isn't hit
             if (!CanRead(bitCount))
             {
                 IsError = true;
@@ -173,7 +320,6 @@ namespace Unreal.Core
                 IsError = true;
                 return ReadOnlyMemory<bool>.Empty;
             }
-
 
             var result = _items.Slice(_position, bitCount);
 
@@ -213,16 +359,22 @@ namespace Unreal.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private unsafe byte ReadByteNoCheck()
         {
-            if (true)
+            if (Avx2.IsSupported)
             {
-                var result2 = new byte();
-
-                //Slow on AMD Zen 2 or older
-                result2 = (byte)Bmi2.X64.ParallelBitExtract(*(ulong*)(Bits + _position), 0x0101010101010101UL);
+                var result = PeekUInt_Intrinsic();
 
                 _position += 8;
 
-                return result2;
+                return (byte)result;
+
+                ////Slow on AMD Zen 2 or older, but is slightly faster on Zen3+
+                //var result = new byte();
+
+                //result = (byte)Bmi2.X64.ParallelBitExtract(*(ulong*)(Bits + _position), 0x0101010101010101UL);
+
+                //_position += 8;
+
+                //return result;
             }
             else
             {
@@ -274,6 +426,26 @@ namespace Unreal.Core
                 return;
             }
 
+            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
+            {
+                var uintSpan = MemoryMarshal.Cast<byte, uint>(data);
+
+                for (int i = 0; i < uintSpan.Length; i++)
+                {
+                    uintSpan[i] = PeekUInt_Intrinsic();
+
+                    _position += 32;
+                }
+
+                //Finish reading last 1-3 bytes
+                for (int i = uintSpan.Length * 4; i < data.Length; i++)
+                {
+                    data[i] = ReadByteNoCheck();
+                }
+
+                return;
+            }
+
             for (int i = 0; i < data.Length; i++)
             {
                 data[i] = ReadByteNoCheck();
@@ -282,6 +454,9 @@ namespace Unreal.Core
 
         public override byte[] ReadBytes(int byteCount)
         {
+            //TODO <10k
+            //Rather than reading 1 byte at once, read multiple
+
             if (byteCount < 0)
             {
                 IsError = true;
@@ -361,19 +536,6 @@ namespace Unreal.Core
             return ReadBytesToString(size);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private uint ReadBitsToInt_Intrinsic(int totalBits)
-        {
-            //Should be safe to load 256 bits regardless of position
-            var rrr = Avx2.LoadVector256((ulong*)(Bits + _position));
-            var cc22 = Avx2.ShiftLeftLogical(rrr, 7);
-            var ret = (uint)Avx2.MoveMask(cc22.AsByte());
-
-            _position += totalBits;
-
-            return ret & (uint.MaxValue >> (32-totalBits));
-        }
-
         /// <summary>
         /// see https://github.com/EpicGames/UnrealEngine/blob/70bc980c6361d9a7d23f6d23ffe322a2d6ef16fb/Engine/Source/Runtime/Core/Public/Serialization/BitReader.h#L69
         /// </summary>
@@ -382,12 +544,14 @@ namespace Unreal.Core
         /// <exception cref="OverflowException"></exception>
         public unsafe override uint ReadSerializedInt(int maxValue)
         {
+            //TODO pass in bit count with max value
+
             uint r = 0;
             bool canRead = false;
             int endPosition = 0;
             bool hadError = false;
 
-            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
+            if (true && Avx2.IsSupported)
             {
                 var pos = _position;
                 var lBit = LastBit;
@@ -400,7 +564,7 @@ namespace Unreal.Core
                 int remainingBits = lBit - pos;
                 int missingBits = nn - remainingBits;
 
-                if(missingBits > 1)
+                if (missingBits > 1)
                 {
                     IsError = true;
 
@@ -409,7 +573,7 @@ namespace Unreal.Core
 
                 canRead = pos + nn <= lBit;
 
-                if(!canRead)
+                if (!canRead)
                 {
                     canRead = pos + --nn <= lBit;
                     reducedBitSize = true;
@@ -473,6 +637,20 @@ namespace Unreal.Core
 
         public override short ReadInt16()
         {
+            if (true && Avx2.IsSupported)
+            {
+                if (!CanRead(16))
+                {
+                    IsError = true;
+                    return 0;
+                }
+
+                var v = (short)PeekUInt_Intrinsic();
+                _position += 16;
+
+                return v;
+            }
+
             Span<byte> value = stackalloc byte[2];
 
             ReadBytes(value);
@@ -480,13 +658,73 @@ namespace Unreal.Core
             return BinaryPrimitives.ReadInt16LittleEndian(value);
         }
 
+        public override ushort ReadUInt16()
+        {
+            if (true && Avx2.IsSupported)
+            {
+                if (!CanRead(16))
+                {
+                    IsError = true;
+                    return 0;
+                }
+
+                var v = (ushort)PeekUInt_Intrinsic();
+                _position += 16;
+
+                return v;
+            }
+
+            Span<byte> value = stackalloc byte[2];
+
+            ReadBytes(value);
+
+            return BinaryPrimitives.ReadUInt16LittleEndian(value);
+        }
+
         public override int ReadInt32()
         {
+            if (true && Avx2.IsSupported)
+            {
+                if (!CanRead(32))
+                {
+                    IsError = true;
+                    return 0;
+                }
+
+                var v = (int)PeekUInt_Intrinsic();
+                _position += 32;
+
+                return v;
+            }
+
             Span<byte> value = stackalloc byte[4];
 
             ReadBytes(value);
 
             return BinaryPrimitives.ReadInt32LittleEndian(value);
+        }
+
+        public override uint ReadUInt32()
+        {
+            if (true && Avx2.IsSupported)
+            {
+                if (!CanRead(32))
+                {
+                    IsError = true;
+                    return 0;
+                }
+
+                var v = PeekUInt_Intrinsic();
+                _position += 32;
+
+                return v;
+            }
+
+            Span<byte> value = stackalloc byte[4];
+
+            ReadBytes(value);
+
+            return BinaryPrimitives.ReadUInt32LittleEndian(value);
         }
 
         public override bool ReadInt32AsBoolean()
@@ -496,11 +734,24 @@ namespace Unreal.Core
 
         public override long ReadInt64()
         {
+            //TODO <10k
+
             Span<byte> value = stackalloc byte[8];
 
             ReadBytes(value);
 
             return BinaryPrimitives.ReadInt64LittleEndian(value);
+        }
+
+        public override ulong ReadUInt64()
+        {
+            //TODO <10k
+
+            Span<byte> value = stackalloc byte[8];
+
+            ReadBytes(value);
+
+            return BinaryPrimitives.ReadUInt64LittleEndian(value);
         }
 
         /// <summary>
@@ -511,7 +762,50 @@ namespace Unreal.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override uint ReadIntPacked()
         {
+            if (true && Avx2.IsSupported)
+            {
+                var fullValue = PeekUInt_Intrinsic();
+
+                bool hasLeft = true;
+                uint returnValue = 0;
+
+                int bitsRead = 0;
+                int shiftCount = 0;
+
+                for (int i = 0; i < 4; i++)
+                {
+                    if (!hasLeft)
+                    {
+                        break;
+                    }
+
+                    hasLeft = (fullValue & 0x01) == 0x01;
+                    returnValue |= ((fullValue & 0xFE) >> 1) << shiftCount;
+                    fullValue >>= 8;
+
+                    bitsRead += 8;
+                    shiftCount += 7;
+                }
+
+                _position += bitsRead;
+
+                //Check if we read too much
+                if (_position > LastBit)
+                {
+                    //Parity output with old version
+                    _position = LastBit;
+
+                    IsError = true;
+                    return 0;
+                }
+
+                return returnValue;
+            }
+
+
             int value = 0;
+            uint v2 = 0;
+
             byte count = 0;
             var remaining = true;
 
@@ -533,11 +827,64 @@ namespace Unreal.Core
                 value |= GetAsByte(_position + 6) << (count + 5);
                 value |= GetAsByte(_position + 7) << (count + 6);
 
+
                 _position += 8;
+
                 count += 7;
             }
 
             return (uint)value;
+        }
+
+        public override sbyte ReadSByte()
+        {
+            throw new NotImplementedException();
+        }
+
+        public override float ReadSingle()
+        {
+            if (true && Avx2.IsSupported)
+            {
+                var cc = new SingleToInt32 { UInt32 = PeekUInt_Intrinsic() };
+
+                _position += 16;
+
+                return cc.Single;
+            }
+
+            Span<byte> value = stackalloc byte[4];
+
+            ReadBytes(value);
+
+            var b = BinaryPrimitives.ReadSingleLittleEndian(value);
+
+            return b;
+        }
+
+        public override double ReadDouble()
+        {
+            //TODO isn't hit
+
+            Span<byte> value = stackalloc byte[8];
+
+            ReadBytes(value);
+
+            return BinaryPrimitives.ReadDoubleLittleEndian(value);
+        }
+
+        public override (T, U)[] ReadTupleArray<T, U>(Func<T> func1, Func<U> func2)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override bool ReadUInt32AsBoolean()
+        {
+            throw new NotImplementedException();
+        }
+
+        public override T ReadUInt32AsEnum<T>()
+        {
+            throw new NotImplementedException();
         }
 
         /// <summary>
@@ -615,9 +962,6 @@ namespace Unreal.Core
             }
         }
 
-
-
-
         public FVector ReadPackedVectorLegacy(int scaleFactor, int maxBits)
         {
             var bits = ReadSerializedInt(maxBits);
@@ -633,6 +977,18 @@ namespace Unreal.Core
             {
                 return new FVector(0, 0, 0);
             }
+
+            //if (Avx2.IsSupported)
+            //{
+            //    var c = Vector128.Create((float)dx, dy, dz, 0);
+            //    var b = Vector128.Create((float)bias);
+            //    var s = Vector128.Create((float)scaleFactor);
+
+            //    var dd = Avx2.Subtract(c, b);
+            //    var rr = Avx2.Divide(dd, s);
+
+            //    return new FVector(rr[0], rr[1], rr[2]);
+            //}
 
             var x = (float)(dx - bias) / scaleFactor;
             var y = (float)(dy - bias) / scaleFactor;
@@ -711,188 +1067,44 @@ namespace Unreal.Core
             return new FRotator(pitch, yaw, roll);
         }
 
-        public override sbyte ReadSByte()
+        #endregion
+
+        #region Intrinsics
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private uint ReadBitsToInt_Intrinsic(int totalBits)
         {
-            throw new NotImplementedException();
+            var ret = PeekUInt_Intrinsic();
+
+            _position += totalBits;
+
+            return ret & (uint.MaxValue >> (32 - totalBits));
         }
 
-        public override float ReadSingle()
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private uint PeekUInt_Intrinsic()
         {
-            Span<byte> value = stackalloc byte[4];
+            //Should be safe to load 256 bits regardless of position
+            var rrr = Avx2.LoadVector256((ulong*)(Bits + _position));
+            var cc22 = Avx2.ShiftLeftLogical(rrr, 7);
+            var ret = (uint)Avx2.MoveMask(cc22.AsByte());
 
-            ReadBytes(value);
-
-            return BinaryPrimitives.ReadSingleLittleEndian(value);
+            return ret;
         }
 
-        public override double ReadDouble()
+        #endregion
+
+        [StructLayout(LayoutKind.Explicit)]
+        private struct SingleToInt32
         {
-            Span<byte> value = stackalloc byte[8];
+            [FieldOffset(0)]
+            public float Single;
 
-            ReadBytes(value);
+            [FieldOffset(0)]
+            public int Int32;
 
-            return BinaryPrimitives.ReadDoubleLittleEndian(value);
-        }
-
-        public override (T, U)[] ReadTupleArray<T, U>(Func<T> func1, Func<U> func2)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override ushort ReadUInt16()
-        {
-            Span<byte> value = stackalloc byte[2];
-
-            ReadBytes(value);
-
-            return BinaryPrimitives.ReadUInt16LittleEndian(value);
-        }
-
-        public override uint ReadUInt32()
-        {
-            Span<byte> value = stackalloc byte[4];
-
-            ReadBytes(value);
-
-            return BinaryPrimitives.ReadUInt32LittleEndian(value);
-        }
-
-        public override bool ReadUInt32AsBoolean()
-        {
-            throw new NotImplementedException();
-        }
-
-        public override T ReadUInt32AsEnum<T>()
-        {
-            throw new NotImplementedException();
-        }
-
-        public override ulong ReadUInt64()
-        {
-            Span<byte> value = stackalloc byte[8];
-
-            ReadBytes(value);
-
-            return BinaryPrimitives.ReadUInt64LittleEndian(value);
-        }
-
-        /// <summary>
-        /// Sets <see cref="Position"/> within current BitArray.
-        /// </summary>
-        /// <param name="offset">The offset relative to the <paramref name="seekOrigin"/>.</param>
-        /// <param name="seekOrigin">A value of type <see cref="SeekOrigin"/> indicating the reference point used to obtain the new position.</param>
-        /// <returns></returns>
-        /// <exception cref="ArgumentOutOfRangeException"></exception>
-        public override void Seek(int offset, SeekOrigin seekOrigin = SeekOrigin.Begin)
-        {
-            if (offset < 0 || offset > LastBit || (seekOrigin == SeekOrigin.Current && offset + _position > LastBit))
-            {
-                throw new ArgumentOutOfRangeException("Specified offset doesnt fit within the BitArray buffer");
-            }
-
-            _ = (seekOrigin switch
-            {
-                SeekOrigin.Begin => _position = offset,
-                SeekOrigin.End => _position = LastBit - offset,
-                SeekOrigin.Current => _position += offset,
-                _ => _position = offset,
-            });
-        }
-
-        public override void SkipBytes(uint byteCount)
-        {
-            SkipBytes((int)byteCount);
-        }
-
-        public override void SkipBytes(int byteCount)
-        {
-            Seek(byteCount * 8, SeekOrigin.Current);
-        }
-
-        public override void SkipBits(int numbits)
-        {
-            _position += numbits;
-
-            if (numbits < 0 || _position > LastBit)
-            {
-                IsError = true;
-
-                _position = LastBit;
-            }
-        }
-
-        /// <summary>
-        /// Save Position to <see cref="MarkPosition"/> so we can reset back to this point.
-        /// see https://github.com/EpicGames/UnrealEngine/blob/70bc980c6361d9a7d23f6d23ffe322a2d6ef16fb/Engine/Source/Runtime/Core/Public/Serialization/BitReader.h#L228
-        /// </summary>
-        public override void Mark()
-        {
-            MarkPosition = _position;
-        }
-
-        /// <summary>
-        /// Set Position back to <see cref="MarkPosition"/>
-        /// see https://github.com/EpicGames/UnrealEngine/blob/70bc980c6361d9a7d23f6d23ffe322a2d6ef16fb/Engine/Source/Runtime/Core/Public/Serialization/BitReader.h#L228
-        /// </summary>
-        public override void Pop()
-        {
-            // TODO: pop makes it sound like a list...
-            _position = MarkPosition;
-        }
-
-        /// <summary>
-        /// Get number of bits left, including any bits after <see cref="LastBit"/>.
-        /// </summary>
-        /// <returns></returns>
-        public override int GetBitsLeft()
-        {
-            return LastBit - _position;
-        }
-
-        /// <summary>
-        /// Append bool array to this archive.
-        /// </summary>
-        /// <param name="data"></param>
-        public override void AppendDataFromChecked(ReadOnlyMemory<bool> data)
-        {
-            AppendBits(data);
-        }
-
-        public override void Dispose()
-        {
-            DisposeBits();
-
-            _positionQueues.Enqueue(_tempLastBit);
-            _positionQueues.Enqueue(_tempPosition);
-        }
-
-        public void SetTempEnd(int totalBits, int index = 0)
-        {
-            uint setPosition = (uint)(_position + totalBits);
-
-            if(setPosition > LastBit)
-            {
-                IsError = true;
-
-                return;
-            }
-
-            _tempLastBit[index] = LastBit;
-            _tempPosition[index] = (int)setPosition;
-            LastBit = _position + totalBits;
-        }
-
-        public void RestoreTemp(int index = 0)
-        {
-            LastBit = _tempLastBit[index];
-            _position = _tempPosition[index];
-
-            /*
-            _tempLastBit = 0;
-            _tempPosition = 0;
-            */
-
-                IsError = false;
+            [FieldOffset(0)]
+            public uint UInt32;
         }
     }
 }
