@@ -74,19 +74,16 @@ namespace FortniteReplayReader
 
         protected override void OnChannelActorRead(uint channel, Actor actor)
         {
-            return;
             Replay.GameInformation.AddActor(channel, actor);
         }
 
         protected override void OnNetDeltaRead(NetDeltaUpdate deltaUpdate)
         {
-            return;
             Replay.GameInformation.HandleDeltaNetRead(deltaUpdate);
         }
 
         protected override void OnExportRead(uint channel, INetFieldExportGroup exportGroup, string staticActorId)
         {
-            return;
             ++TotalPropertiesRead;
 
 #if DEBUG
