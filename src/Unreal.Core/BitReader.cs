@@ -267,7 +267,7 @@ namespace Unreal.Core
                 return 0;
             }
 
-            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
+            if (Avx2.IsSupported)
             {
                 return (int)ReadBitsToUInt_Intrinsic(bitCount);
             }
@@ -294,7 +294,7 @@ namespace Unreal.Core
                 return 0;
             }
 
-            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
+            if (Avx2.IsSupported)
             {
                 return ReadBitsToULong_Intrinsic(bitCount);
             }
@@ -363,7 +363,7 @@ namespace Unreal.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private unsafe byte ReadByteNoCheck()
         {
-            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
+            if (Avx2.IsSupported)
             {
                 var result = PeekUInt_Intrinsic();
 
@@ -430,7 +430,7 @@ namespace Unreal.Core
                 return;
             }
 
-            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
+            if (Avx2.IsSupported)
             {
                 var uintSpan = MemoryMarshal.Cast<byte, uint>(data);
 
@@ -555,7 +555,7 @@ namespace Unreal.Core
             int endPosition = 0;
             bool hadError = false;
 
-            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
+            if (Avx2.IsSupported)
             {
                 var pos = _position;
                 var lBit = LastBit;
@@ -641,7 +641,7 @@ namespace Unreal.Core
 
         public override short ReadInt16()
         {
-            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
+            if (Avx2.IsSupported)
             {
                 if (!CanRead(16))
                 {
@@ -664,7 +664,7 @@ namespace Unreal.Core
 
         public override ushort ReadUInt16()
         {
-            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
+            if (Avx2.IsSupported)
             {
                 if (!CanRead(16))
                 {
@@ -687,7 +687,7 @@ namespace Unreal.Core
 
         public override int ReadInt32()
         {
-            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
+            if (Avx2.IsSupported)
             {
                 if (!CanRead(32))
                 {
@@ -710,7 +710,7 @@ namespace Unreal.Core
 
         public override uint ReadUInt32()
         {
-            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
+            if (Avx2.IsSupported)
             {
                 if (!CanRead(32))
                 {
@@ -738,7 +738,7 @@ namespace Unreal.Core
 
         public override long ReadInt64()
         {
-            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
+            if (Avx2.IsSupported)
             {
                 if (!CanRead(64))
                 {
@@ -762,7 +762,7 @@ namespace Unreal.Core
 
         public override ulong ReadUInt64()
         {
-            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
+            if (Avx2.IsSupported)
             {
                 if (!CanRead(64))
                 {
@@ -792,7 +792,7 @@ namespace Unreal.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override uint ReadIntPacked()
         {
-            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
+            if (Avx2.IsSupported)
             {
                 var fullValue = PeekUInt_Intrinsic();
 
@@ -873,7 +873,7 @@ namespace Unreal.Core
 
         public override float ReadSingle()
         {
-            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
+            if (Avx2.IsSupported)
             {
                 var cc = new Int32ToSingle { UInt32 = PeekUInt_Intrinsic() };
 
@@ -893,7 +893,7 @@ namespace Unreal.Core
 
         public override double ReadDouble()
         {
-            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
+            if (Avx2.IsSupported)
             {
                 if (!CanRead(64))
                 {

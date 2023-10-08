@@ -59,81 +59,78 @@ namespace Unreal.Core
             LastBit = totalBits;
             Bits = (bool*)_owner.PinnedMemory.Pointer;
 
-            if (Optimizations == Opts.Opt1)
-            {
 #if NET8_0_OR_GREATER
-                if (Avx512BW.IsSupported)
+            if (Avx512BW.IsSupported)
+            {
+                //Console.WriteLine("a");
+
+
+                Span<byte> rb = new Span<byte>(_owner.PinnedMemory.Pointer, byteCount * 8);
+                Span<byte> db = new Span<byte>(ptr, byteCount);
+
+                Span<ulong> d = MemoryMarshal.Cast<byte, ulong>(db);
+                Span<ulong> r = MemoryMarshal.Cast<byte, ulong>(rb);
+
+                var initalRead = totalBits / 8 * 8;
+
+                for (int i = 0; i < d.Length; i++)
                 {
-                    //Console.WriteLine("a");
+                    var vmask = Vector512.Create(d[i]).AsByte();
+                    vmask = Avx512BW.Shuffle(vmask, _avx512Shuffle);
+                    vmask = Avx512BW.And(vmask, _avx512BitMask);
+                    vmask = Avx512BW.Min(vmask, Vector512<byte>.One);
 
-
-                    Span<byte> rb = new Span<byte>(_owner.PinnedMemory.Pointer, byteCount * 8);
-                    Span<byte> db = new Span<byte>(ptr, byteCount);
-
-                    Span<ulong> d = MemoryMarshal.Cast<byte, ulong>(db);
-                    Span<ulong> r = MemoryMarshal.Cast<byte, ulong>(rb);
-
-                    var initalRead = totalBits / 8 * 8;
-
-                    for (int i = 0; i < d.Length; i++)
-                    {
-                        var vmask = Vector512.Create(d[i]).AsByte();
-                        vmask = Avx512BW.Shuffle(vmask, _avx512Shuffle);
-                        vmask = Avx512BW.And(vmask, _avx512BitMask);
-                        vmask = Avx512BW.Min(vmask, Vector512<byte>.One);
-
-                        vmask.CopyTo(rb.Slice(i * 64));
-                    }
-
-                    //Can be slow on AMD Zen 2 or earlier, but it's a max of 7 iterations
-                    for (int i = d.Length * 8; i < db.Length; i++)
-                    {
-                        r[i] = Bmi2.X64.ParallelBitDeposit(db[i], 0x0101010101010101UL);
-                    }
+                    vmask.CopyTo(rb.Slice(i * 64));
                 }
-                else
-#endif
-                if (Avx2.IsSupported)
+
+                //Can be slow on AMD Zen 2 or earlier, but it's a max of 7 iterations
+                for (int i = d.Length * 8; i < db.Length; i++)
                 {
-                    Span<byte> rb = new Span<byte>(_owner.PinnedMemory.Pointer, byteCount * 8);
-                    Span<byte> db = new Span<byte>(ptr, byteCount);
+                    r[i] = Bmi2.X64.ParallelBitDeposit(db[i], 0x0101010101010101UL);
+                }
+            }
+            else
+#endif
+            if (Avx2.IsSupported)
+            {
+                Span<byte> rb = new Span<byte>(_owner.PinnedMemory.Pointer, byteCount * 8);
+                Span<byte> db = new Span<byte>(ptr, byteCount);
 
-                    Span<uint> d = MemoryMarshal.Cast<byte, uint>(db);
-                    Span<ulong> r = MemoryMarshal.Cast<byte, ulong>(rb);
+                Span<uint> d = MemoryMarshal.Cast<byte, uint>(db);
+                Span<ulong> r = MemoryMarshal.Cast<byte, ulong>(rb);
 
-                    for (int i = 0; i < d.Length; i++)
-                    {
-                        var vmask = Vector256.Create(d[i]).AsByte();
-                        vmask = Avx2.Shuffle(vmask, _avx2Shuffle);
-                        vmask = Avx2.And(vmask, _avx2BitMask);
-                        vmask = Avx2.Min(vmask, _avx2One);
+                for (int i = 0; i < d.Length; i++)
+                {
+                    var vmask = Vector256.Create(d[i]).AsByte();
+                    vmask = Avx2.Shuffle(vmask, _avx2Shuffle);
+                    vmask = Avx2.And(vmask, _avx2BitMask);
+                    vmask = Avx2.Min(vmask, _avx2One);
 
 #if NET7_0_OR_GREATER
-                        vmask.CopyTo(rb.Slice(i * 32));
+                    vmask.CopyTo(rb.Slice(i * 32));
 
 #else
                         Avx2.Store((byte*)(Bits + i * 32), vmask);
 #endif
-                    }
-
-                    for (int i = d.Length * 4; i < db.Length; i++)
-                    {
-                        r[i] = Bmi2.X64.ParallelBitDeposit(db[i], 0x0101010101010101UL);
-                    }
                 }
-                else
+
+                for (int i = d.Length * 4; i < db.Length; i++)
                 {
-                    var bb = (ulong*)_owner.PinnedMemory.Pointer;
-
-                    for (int i = 0; i < byteCount; i++)
-                    {
-                        *(bb + i) = Bmi2.X64.ParallelBitDeposit(*(ptr + i), 0x0101010101010101UL);
-
-                        var ba = *(bb + i);
-                    }
-
-                    Bits = (bool*)bb;
+                    r[i] = Bmi2.X64.ParallelBitDeposit(db[i], 0x0101010101010101UL);
                 }
+            }
+            else if (Bmi2.X64.IsSupported)
+            {
+                var bb = (ulong*)_owner.PinnedMemory.Pointer;
+
+                for (int i = 0; i < byteCount; i++)
+                {
+                    *(bb + i) = Bmi2.X64.ParallelBitDeposit(*(ptr + i), 0x0101010101010101UL);
+
+                    var ba = *(bb + i);
+                }
+
+                Bits = (bool*)bb;
             }
             else
             {
