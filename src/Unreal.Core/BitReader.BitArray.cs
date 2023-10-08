@@ -59,7 +59,7 @@ namespace Unreal.Core
             LastBit = totalBits;
             Bits = (bool*)_owner.PinnedMemory.Pointer;
 
-            if (true)
+            if (Optimizations == Opts.Opt1)
             {
 #if NET8_0_OR_GREATER
                 if (Avx512BW.IsSupported)

@@ -73,45 +73,53 @@ namespace ConsoleReader
             return _reader.ReadReplay("Replays/server.replay", Type);
         }
 
+        ////[Benchmark]
+        //public FortniteReplay ReadMassiveReplay()
+        //{
+        //    BitReader.Optimizations = EnableIntrinsics;
+
+        //    return _reader.ReadReplay("Replays/massive.replay", Type);
+        //}
+
         //[Benchmark]
-        public FortniteReplay ReadMassiveReplay()
-        {
-            BitReader.Optimizations = EnableIntrinsics;
+        //public FortniteReplay ReadLongReplay()
+        //{
+        //    BitReader.Optimizations = EnableIntrinsics;
 
-            return _reader.ReadReplay("Replays/massive.replay", Type);
-        }
+        //    return _reader.ReadReplay("Replays/newSeason.replay", Type);
+        //}
 
         //[Benchmark]
-        public FortniteReplay ReadLongReplay()
-        {
-            BitReader.Optimizations = EnableIntrinsics;
+        //public FortniteReplay ReadShortReplay_RecentSeason()
+        //{
+        //    BitReader.Optimizations = EnableIntrinsics;
 
-            return _reader.ReadReplay("Replays/newSeason.replay", Type);
-        }
+        //    return _reader.ReadReplay("Replays/Outro.replay", Type);
+        //}
+
+        //[Benchmark]
+        //public FortniteReplay ReadShortReplay()
+        //{
+        //    BitReader.Optimizations = EnableIntrinsics;
+
+        //    return _reader.ReadReplay("Replays/replay_Bow.replay", Type);
+        //}
         
-        //[Benchmark]
-        public FortniteReplay ReadShortReplay()
-        {
-            BitReader.Optimizations = EnableIntrinsics;
+        ////[Benchmark]
+        //public FortniteReplay ReadOldReplay()
+        //{
+        //    BitReader.Optimizations = EnableIntrinsics;
 
-            return _reader.ReadReplay("Replays/replay_Bow.replay", Type);
-        }
-        
-        //[Benchmark]
-        public FortniteReplay ReadOldReplay()
-        {
-            BitReader.Optimizations = EnableIntrinsics;
+        //    return _reader.ReadReplay("Replays/season11.11.replay", Type);
+        //}
 
-            return _reader.ReadReplay("Replays/season11.11.replay", Type);
-        }
+        ////[Benchmark]
+        //public FortniteReplay ReadRoundReplay()
+        //{
+        //    BitReader.Optimizations = EnableIntrinsics;
 
-        //[Benchmark]
-        public FortniteReplay ReadRoundReplay()
-        {
-            BitReader.Optimizations = EnableIntrinsics;
-
-            return _reader.ReadReplay("Replays/rounds.replay", Type);
-        }
+        //    return _reader.ReadReplay("Replays/rounds.replay", Type);
+        //}
     }
 
     unsafe class Program
@@ -132,7 +140,6 @@ namespace ConsoleReader
             Benchmark a = new Benchmark();
 
 
-            var b = a.ReadLongReplay();
             /*
             ReplayReader reader2 = a._reader;
 
@@ -161,7 +168,7 @@ namespace ConsoleReader
 
             //var replayFile = "Replays/season12_arena.replay";
             //var replayFile = "Replays/season11.31.replay
-            var replayFile = "Replays/server.replay"; //Used for testing
+            var replayFile = "Replays/Outro.replay"; //Used for testing
             //var replayFile = @"C:\Users\TnT\Source\Repos\FortniteReplayDecompressor_Shiqan\src\ConsoleReader\bin\Release\netcoreapp3.1\Replays\collectPickup.replay";
 
             //var replayFile = "Replays/season11.11.replay"; //Used for testing

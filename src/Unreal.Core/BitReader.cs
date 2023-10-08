@@ -30,7 +30,7 @@ namespace Unreal.Core
         {
             ++counter;
 
-            if(counter % 10 == 0)
+            if(counter % 1000 == 0)
             {
                 Console.WriteLine(counter);
             }
@@ -267,16 +267,17 @@ namespace Unreal.Core
                 return 0;
             }
 
-            if (true && Avx2.IsSupported)
+            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
             {
-                return (int)ReadBitsToInt_Intrinsic(bitCount);
+                return (int)ReadBitsToUInt_Intrinsic(bitCount);
             }
 
             var result = 0;
 
             for (var i = 0; i < bitCount; i++)
             {
-                result |= (byte)(GetAsByte(_position + i) << i);
+                //Byte cast removed as a >8 bitcount would be truncated?
+                result |= (GetAsByte(_position + i) << i);
             }
 
             _position += bitCount;
@@ -284,10 +285,8 @@ namespace Unreal.Core
             return result;
         }
 
-        public ulong ReadBitsToLong(int bitCount)
+        public ulong ReadBitsToULong(int bitCount)
         {
-            //TODO AVX2/AVX512 instructions
-            //Isn't hit
             if (!CanRead(bitCount))
             {
                 IsError = true;
@@ -295,11 +294,16 @@ namespace Unreal.Core
                 return 0;
             }
 
+            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
+            {
+                return ReadBitsToULong_Intrinsic(bitCount);
+            }
+
             ulong result = 0;
 
             for (var i = 0; i < bitCount; i++)
             {
-                result |= (byte)(GetAsByte(_position + i) << i);
+                result |= ((ulong)GetAsByte(_position + i) << i);
             }
 
             _position += bitCount;
@@ -359,7 +363,7 @@ namespace Unreal.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private unsafe byte ReadByteNoCheck()
         {
-            if (Avx2.IsSupported)
+            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
             {
                 var result = PeekUInt_Intrinsic();
 
@@ -551,7 +555,7 @@ namespace Unreal.Core
             int endPosition = 0;
             bool hadError = false;
 
-            if (true && Avx2.IsSupported)
+            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
             {
                 var pos = _position;
                 var lBit = LastBit;
@@ -581,7 +585,7 @@ namespace Unreal.Core
 
                 if (canRead)
                 {
-                    uint v = ReadBitsToInt_Intrinsic(nn);
+                    uint v = ReadBitsToUInt_Intrinsic(nn);
                     var m1 = uint.MaxValue >> leadingZeros;
                     var m2 = m1 >> 1;
 
@@ -637,7 +641,7 @@ namespace Unreal.Core
 
         public override short ReadInt16()
         {
-            if (true && Avx2.IsSupported)
+            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
             {
                 if (!CanRead(16))
                 {
@@ -660,7 +664,7 @@ namespace Unreal.Core
 
         public override ushort ReadUInt16()
         {
-            if (true && Avx2.IsSupported)
+            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
             {
                 if (!CanRead(16))
                 {
@@ -683,7 +687,7 @@ namespace Unreal.Core
 
         public override int ReadInt32()
         {
-            if (true && Avx2.IsSupported)
+            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
             {
                 if (!CanRead(32))
                 {
@@ -706,7 +710,7 @@ namespace Unreal.Core
 
         public override uint ReadUInt32()
         {
-            if (true && Avx2.IsSupported)
+            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
             {
                 if (!CanRead(32))
                 {
@@ -734,7 +738,20 @@ namespace Unreal.Core
 
         public override long ReadInt64()
         {
-            //TODO <10k
+            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
+            {
+                if (!CanRead(64))
+                {
+                    IsError = true;
+                    return 0;
+                }
+
+                var result = PeekULong_Intrinsic();
+
+                _position += 64;
+
+                return (long)result;
+            }
 
             Span<byte> value = stackalloc byte[8];
 
@@ -745,7 +762,20 @@ namespace Unreal.Core
 
         public override ulong ReadUInt64()
         {
-            //TODO <10k
+            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
+            {
+                if (!CanRead(64))
+                {
+                    IsError = true;
+                    return 0;
+                }
+
+                var result = PeekULong_Intrinsic();
+
+                _position += 64;
+
+                return result;
+            }
 
             Span<byte> value = stackalloc byte[8];
 
@@ -762,7 +792,7 @@ namespace Unreal.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override uint ReadIntPacked()
         {
-            if (true && Avx2.IsSupported)
+            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
             {
                 var fullValue = PeekUInt_Intrinsic();
 
@@ -843,11 +873,11 @@ namespace Unreal.Core
 
         public override float ReadSingle()
         {
-            if (true && Avx2.IsSupported)
+            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
             {
-                var cc = new SingleToInt32 { UInt32 = PeekUInt_Intrinsic() };
+                var cc = new Int32ToSingle { UInt32 = PeekUInt_Intrinsic() };
 
-                _position += 16;
+                _position += 32;
 
                 return cc.Single;
             }
@@ -863,7 +893,24 @@ namespace Unreal.Core
 
         public override double ReadDouble()
         {
-            //TODO isn't hit
+            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
+            {
+                if (!CanRead(64))
+                {
+                    IsError = true;
+                    return 0;
+                }
+
+                var l = PeekUInt_Intrinsic();
+
+                _position += 32;
+
+                var uint64Value = l | ((ulong)PeekUInt_Intrinsic() << 32);
+
+                _position += 32;
+
+                return new UInt64ToDouble { UInt64 = uint64Value }.Double;
+            }
 
             Span<byte> value = stackalloc byte[8];
 
@@ -913,9 +960,9 @@ namespace Unreal.Core
 
             if (componentBitCount > 0U)
             {
-                var X = ReadBitsToLong((int)componentBitCount);
-                var Y = ReadBitsToLong((int)componentBitCount);
-                var Z = ReadBitsToLong((int)componentBitCount);
+                var X = ReadBitsToULong((int)componentBitCount);
+                var Y = ReadBitsToULong((int)componentBitCount);
+                var Z = ReadBitsToULong((int)componentBitCount);
 
                 ulong signBit = 1UL << (int)(componentBitCount - 1);
 
@@ -1072,13 +1119,23 @@ namespace Unreal.Core
         #region Intrinsics
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private uint ReadBitsToInt_Intrinsic(int totalBits)
+        private uint ReadBitsToUInt_Intrinsic(int totalBits)
         {
             var ret = PeekUInt_Intrinsic();
 
             _position += totalBits;
 
             return ret & (uint.MaxValue >> (32 - totalBits));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private ulong ReadBitsToULong_Intrinsic(int totalBits)
+        {
+            var ret = PeekULong_Intrinsic();
+
+            _position += totalBits;
+
+            return ret & (ulong.MaxValue >> (64 - totalBits));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1091,11 +1148,27 @@ namespace Unreal.Core
 
             return ret;
         }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private ulong PeekULong_Intrinsic()
+        {
+            //Possibly use Avx512 to do this faster
+
+            var l = PeekUInt_Intrinsic();
+
+            _position += 32;
+
+            var ulongValue = l | ((ulong)PeekUInt_Intrinsic() << 32);
+
+            _position -= 32;
+
+            return ulongValue;
+        }
 
         #endregion
 
         [StructLayout(LayoutKind.Explicit)]
-        private struct SingleToInt32
+        private struct Int32ToSingle
         {
             [FieldOffset(0)]
             public float Single;
@@ -1105,6 +1178,16 @@ namespace Unreal.Core
 
             [FieldOffset(0)]
             public uint UInt32;
+        }
+
+        [StructLayout(LayoutKind.Explicit)]
+        private struct UInt64ToDouble
+        {
+            [FieldOffset(0)]
+            public double Double;
+
+            [FieldOffset(0)]
+            public ulong UInt64;
         }
     }
 }
