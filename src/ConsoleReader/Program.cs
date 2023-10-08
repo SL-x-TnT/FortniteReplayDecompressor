@@ -33,7 +33,7 @@ namespace ConsoleReader
     
     [MemoryDiagnoser]
     //[SimpleJob(RuntimeMoniker.Net50)]
-    [SimpleJob(RuntimeMoniker.Net70)]
+    //[SimpleJob(RuntimeMoniker.Net70)]
     [SimpleJob(RuntimeMoniker.Net80)]
     public class Benchmark
     {
@@ -41,8 +41,8 @@ namespace ConsoleReader
 
         private byte[] test = new byte[100000];
 
-        [Params(false, true)]
-        public bool EnableIntrinsics;
+        [Params(BitReader.Opts.Opt2, BitReader.Opts.Opt1, BitReader.Opts.Opt2)]
+        public BitReader.Opts EnableIntrinsics;
 
         [Params(ParseType.Full)]
         public ParseType Type;
@@ -68,7 +68,7 @@ namespace ConsoleReader
         [Benchmark]
         public FortniteReplay ReadServerReplay()
         {
-            BitReader.UseIntrinsics = EnableIntrinsics;
+            BitReader.Optimizations = EnableIntrinsics;
 
             return _reader.ReadReplay("Replays/server.replay", Type);
         }
@@ -76,23 +76,23 @@ namespace ConsoleReader
         //[Benchmark]
         public FortniteReplay ReadMassiveReplay()
         {
-            BitReader.UseIntrinsics = EnableIntrinsics;
+            BitReader.Optimizations = EnableIntrinsics;
 
             return _reader.ReadReplay("Replays/massive.replay", Type);
         }
 
-        [Benchmark]
+        //[Benchmark]
         public FortniteReplay ReadLongReplay()
         {
-            BitReader.UseIntrinsics = EnableIntrinsics;
+            BitReader.Optimizations = EnableIntrinsics;
 
             return _reader.ReadReplay("Replays/newSeason.replay", Type);
         }
         
-        [Benchmark]
+        //[Benchmark]
         public FortniteReplay ReadShortReplay()
         {
-            BitReader.UseIntrinsics = EnableIntrinsics;
+            BitReader.Optimizations = EnableIntrinsics;
 
             return _reader.ReadReplay("Replays/replay_Bow.replay", Type);
         }
@@ -100,7 +100,7 @@ namespace ConsoleReader
         //[Benchmark]
         public FortniteReplay ReadOldReplay()
         {
-            BitReader.UseIntrinsics = EnableIntrinsics;
+            BitReader.Optimizations = EnableIntrinsics;
 
             return _reader.ReadReplay("Replays/season11.11.replay", Type);
         }
@@ -108,7 +108,7 @@ namespace ConsoleReader
         //[Benchmark]
         public FortniteReplay ReadRoundReplay()
         {
-            BitReader.UseIntrinsics = EnableIntrinsics;
+            BitReader.Optimizations = EnableIntrinsics;
 
             return _reader.ReadReplay("Replays/rounds.replay", Type);
         }

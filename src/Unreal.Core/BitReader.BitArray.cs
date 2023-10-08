@@ -15,11 +15,14 @@ namespace Unreal.Core
 {
     public unsafe partial class BitReader
     {
-        public static bool UseIntrinsics = true;
+        public enum Opts { None, Opt1, Opt2 };
+
+        public static Opts Optimizations = Opts.Opt1;
 
         protected bool* Bits;
 
         protected ReadOnlyMemory<bool> _items { get; set; }
+
         private IPinnedMemoryOwner<bool> _owner;
 
         public void SetBits(byte* ptr, int byteCount, int bitCount)
@@ -48,12 +51,15 @@ namespace Unreal.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void CreateBitArray(byte* ptr, int byteCount, int totalBits)
         {
-            _owner = PinnedMemoryPool<bool>.Shared.Rent(byteCount * 8);
+            //Gives a 256 bool buffer for faster parsing 
+            const int sizeBuffer = 256;
+
+            _owner = PinnedMemoryPool<bool>.Shared.Rent(byteCount * 8 + sizeBuffer);
             _items = _owner.PinnedMemory.Memory;
             LastBit = totalBits;
             Bits = (bool*)_owner.PinnedMemory.Pointer;
 
-            if (UseIntrinsics)
+            if (true)
             {
 #if NET8_0_OR_GREATER
                 if (Avx512BW.IsSupported)
@@ -162,34 +168,34 @@ namespace Unreal.Core
         }
 
 
-private void AppendBits(ReadOnlyMemory<bool> after)
-{
-IPinnedMemoryOwner<bool> newOwner = PinnedMemoryPool<bool>.Shared.Rent(after.Length + LastBit);
-Memory<bool> newMemory = newOwner.PinnedMemory.Memory;
-int oldLength = LastBit;
+        private void AppendBits(ReadOnlyMemory<bool> after)
+        {
+            IPinnedMemoryOwner<bool> newOwner = PinnedMemoryPool<bool>.Shared.Rent(after.Length + LastBit);
+            Memory<bool> newMemory = newOwner.PinnedMemory.Memory;
+            int oldLength = LastBit;
 
-//Copy old array
-_items.CopyTo(newMemory);
+            //Copy old array
+            _items.CopyTo(newMemory);
 
-DisposeBits(); //Get rid of old
+            DisposeBits(); //Get rid of old
 
-_items = newMemory;
+            _items = newMemory;
 
-_owner = newOwner;
-Bits = (bool*)_owner.PinnedMemory.Pointer;
+            _owner = newOwner;
+            Bits = (bool*)_owner.PinnedMemory.Pointer;
 
-MemoryHandle afterPin = after.Pin();
+            MemoryHandle afterPin = after.Pin();
 
-Buffer.MemoryCopy(afterPin.Pointer, Bits + oldLength, after.Length, after.Length);
+            Buffer.MemoryCopy(afterPin.Pointer, Bits + oldLength, after.Length, after.Length);
 
-afterPin.Dispose();
+            afterPin.Dispose();
 
-LastBit = after.Length + LastBit;
-}
+            LastBit = after.Length + LastBit;
+        }
 
-protected byte GetAsByte(int index)
-{
-return (*(byte*)(Bits + index));
-}
-}
+        protected byte GetAsByte(int index)
+        {
+            return (*(byte*)(Bits + index));
+        }
+    }
 }

@@ -6,10 +6,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics.X86;
+using System.Runtime.Intrinsics;
 using System.Text;
 using Unreal.Core.Extensions;
 using Unreal.Core.Models;
 using Unreal.Core.Models.Enums;
+using System.Collections.Specialized;
 
 namespace Unreal.Core
 {
@@ -210,22 +213,36 @@ namespace Unreal.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private unsafe byte ReadByteNoCheck()
         {
-            var result = new byte();
+            if (true)
+            {
+                var result2 = new byte();
 
-            var pos = _position;
+                //Slow on AMD Zen 2 or older
+                result2 = (byte)Bmi2.X64.ParallelBitExtract(*(ulong*)(Bits + _position), 0x0101010101010101UL);
 
-            result |= (GetAsByte(pos + 0));
-            result |= (byte)(GetAsByte(pos + 1) << 1);
-            result |= (byte)(GetAsByte(pos + 2) << 2);
-            result |= (byte)(GetAsByte(pos + 3) << 3);
-            result |= (byte)(GetAsByte(pos + 4) << 4);
-            result |= (byte)(GetAsByte(pos + 5) << 5);
-            result |= (byte)(GetAsByte(pos + 6) << 6);
-            result |= (byte)(GetAsByte(pos + 7) << 7);
+                _position += 8;
 
-            _position += 8;
+                return result2;
+            }
+            else
+            {
+                var result = new byte();
 
-            return result;
+                var pos = _position;
+
+                result |= (GetAsByte(pos + 0));
+                result |= (byte)(GetAsByte(pos + 1) << 1);
+                result |= (byte)(GetAsByte(pos + 2) << 2);
+                result |= (byte)(GetAsByte(pos + 3) << 3);
+                result |= (byte)(GetAsByte(pos + 4) << 4);
+                result |= (byte)(GetAsByte(pos + 5) << 5);
+                result |= (byte)(GetAsByte(pos + 6) << 6);
+                result |= (byte)(GetAsByte(pos + 7) << 7);
+
+                _position += 8;
+
+                return result;
+            }
         }
 
         /// <summary>
@@ -344,6 +361,19 @@ namespace Unreal.Core
             return ReadBytesToString(size);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private uint ReadBitsToInt_Intrinsic(int totalBits)
+        {
+            //Should be safe to load 256 bits regardless of position
+            var rrr = Avx2.LoadVector256((ulong*)(Bits + _position));
+            var cc22 = Avx2.ShiftLeftLogical(rrr, 7);
+            var ret = (uint)Avx2.MoveMask(cc22.AsByte());
+
+            _position += totalBits;
+
+            return ret & (uint.MaxValue >> (32-totalBits));
+        }
+
         /// <summary>
         /// see https://github.com/EpicGames/UnrealEngine/blob/70bc980c6361d9a7d23f6d23ffe322a2d6ef16fb/Engine/Source/Runtime/Core/Public/Serialization/BitReader.h#L69
         /// </summary>
@@ -352,9 +382,78 @@ namespace Unreal.Core
         /// <exception cref="OverflowException"></exception>
         public unsafe override uint ReadSerializedInt(int maxValue)
         {
+            uint r = 0;
+            bool canRead = false;
+            int endPosition = 0;
+            bool hadError = false;
+
+            if (Optimizations == Opts.Opt1 && Avx2.IsSupported)
+            {
+                var pos = _position;
+                var lBit = LastBit;
+
+                var leadingZeros = BitOperations.LeadingZeroCount((uint)maxValue);
+                var nn = 32 - leadingZeros;
+
+                bool reducedBitSize = false;
+
+                int remainingBits = lBit - pos;
+                int missingBits = nn - remainingBits;
+
+                if(missingBits > 1)
+                {
+                    IsError = true;
+
+                    return 0;
+                }
+
+                canRead = pos + nn <= lBit;
+
+                if(!canRead)
+                {
+                    canRead = pos + --nn <= lBit;
+                    reducedBitSize = true;
+                }
+
+                if (canRead)
+                {
+                    uint v = ReadBitsToInt_Intrinsic(nn);
+                    var m1 = uint.MaxValue >> leadingZeros;
+                    var m2 = m1 >> 1;
+
+                    r = v & m2;
+
+                    //Reading last bit put us over max
+                    if ((r + m2 + 1) >= maxValue)
+                    {
+                        if (!reducedBitSize)
+                        {
+                            _position--;
+                        }
+
+                        //return r;
+                    }
+                    else
+                    {
+                        if (!reducedBitSize)
+                        {
+                            r = v & m1;
+                        }
+                        else
+                        {
+                            IsError = true;
+
+                            return 0;
+                        }
+                        //return r;
+                    }
+
+                    return r;
+                }
+            }
+
             int value = 0;
             int count = 0;
-
 
             var mValue = (uint)maxValue;
 
